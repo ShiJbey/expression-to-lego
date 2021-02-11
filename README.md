@@ -1,6 +1,8 @@
 # Lego Smile Detector
 
 By: Shi Johnson-Bey and Sabrina Fielder
+
+
 Detects when a peron in the camera smiles and shows them a lego face corresposdning to ther faial expressions (only distinguishes smiles and neutral faces).
 
 Trained on data from the [FEI Face Database](https://fei.edu.br/~cet/facedatabase.html).
