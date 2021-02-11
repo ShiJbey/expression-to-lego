@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Landmark Visualization</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta1/dist/css/bootstrap.min.css" rel="stylesheet"
+      integrity="sha384-giJF6kkoqNQ00vy+HMDP7azOuL0xtbfIcaT9wjKHr8RbDVddVHyTfAAsrekwKmP1" crossorigin="anonymous">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  </head>
+  <body>
+    <div class="container">
+
+      <h1>Face Landmark Visualizer</h1>
+
+      <div class="border p-3 m-2">
+        <div class="input-group">
+          <label class="input-group-text" for="inputGroupFile01">Landmark JSON</label>
+          <input type="file" class="form-control" id="inputGroupFile01" multiple onchange="onInputChange()">
+        </div>
+      </div>
+
+      <div id="tester" class="m-3" style="width:600px; height:600px;"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta1/dist/js/bootstrap.bundle.min.js"
+      integrity="sha384-ygbV9kiqUc6oa4msXn9868pTtWMgiQaeYH7/t7LECLbyPA2x65Kgf80OJFdroafW"
+      crossorigin="anonymous"></script>
+
+    <script>
+      TESTER = document.getElementById('tester');
+      // Plotly.newPlot( TESTER, [{
+      // x: [1, 2, 3, 4, 5],
+      // y: [1, 2, 4, 8, 16] }], {
+      // margin: { t: 0 } } );
+      const lipData = {
+        x: [],
+        y: [],
+        z: [],
+        mode: 'markers',
+        marker: {
+          color: 'rgb(127, 127, 127)',
+          size: 12,
+          symbol: 'circle',
+          line: {
+            color: 'rgb(204, 204, 204)',
+            width: 1
+          },
+          opacity: 0.8
+        },
+        type: 'scatter3d'
+      }
+
+      const data = [lipData]
+      const layout = {
+        margin: { l: 0, r: 0, b: 0, t: 0 }
+      };
+      Plotly.newPlot(TESTER, data, layout);
+    </script>
+
+    <script>
+      const trainingProgress = document.getElementById('trainingProgress');
+      const canvas = document.getElementById('canvas');
+      const progressPanel = document.getElementById('progressPanel')
+      const doneAlert = document.getElementById('done-alert');
+      const imagesUploaded = false;
+
+      let files = [];
+
+      async function onInputChange() {
+        files = event.target.files;
+        document.getElementById('run-btn').disabled = false;
+      }
+
+      function resetProgress() {
+        trainingProgress.style.width = '0%';
+        trainingProgress.setAttribute('aria-valuenow', 0);
+      }
+
+      function setProgress(value) {
+        trainingProgress.style.width = `${value}%`;
+        trainingProgress.setAttribute('aria-valuenow', value);
+      }
+
+      // From: https://stackoverflow.com/a/30800715
+      function downloadObjectAsJson(exportObj, exportName){
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportObj));
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute("href",     dataStr);
+        downloadAnchorNode.setAttribute("download", exportName + ".json");
+        document.body.appendChild(downloadAnchorNode); // required for firefox
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
+      }
+
+      function writeFileToCanvas(file) {
+        return new Promise((resolve, reject) => {
+          const ctx = canvas.getContext('2d');
+          const img = new Image();
+          img.onload = () => {
+            ctx.drawImage(img, 0, 0);
+            resolve();
+          };
+          img.src = URL.createObjectURL(file);
+        });
+      }
+
+      function showProgressPanel() {
+        progressPanel.style.display = 'block';
+      }
+
+      function hideProgressPanel() {
+        progressPanel.style.display = 'none';
+      }
+
+      function hideSuccessAlert() {
+        doneAlert.style.display = 'none';
+      }
+
+      function showSuccessAlert() {
+        doneAlert.style.display = 'block';
+      }
+
+      async function run() {
+        try {
+          await tf.ready();
+
+          showProgressPanel();
+          hideSuccessAlert();
+
+          const predictions = {};
+
+          const model = await faceLandmarksDetection.load(
+            faceLandmarksDetection.SupportedPackages.mediapipeFacemesh);
+
+          const totalFiles = files.length;
+
+          for (let  i = 0; i < files.length; i++) {
+            const file = files[i];
+            const [filename] = file.name.split('.');
+            const [subject, label] = filename.split('_');
+
+            await writeFileToCanvas(file);
+
+            // Take the first face
+            const [prediction] = await model.estimateFaces({
+              input: canvas
+            });
+
+            predictions[filename] = prediction.annotations;
+
+            setProgress((i + 1) / totalFiles * 100);
+          }
+
+          showSuccessAlert();
+
+          downloadObjectAsJson(predictions, 'landmarks');
+        } catch(err) {
+          console.error(err);
+        }
+      }
+
+      hideProgressPanel();
+      resetProgress();
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta1/dist/js/bootstrap.bundle.min.js"
+    integrity="sha384-ygbV9kiqUc6oa4msXn9868pTtWMgiQaeYH7/t7LECLbyPA2x65Kgf80OJFdroafW"
+    crossorigin="anonymous"></script>
+  </body>
+</html>

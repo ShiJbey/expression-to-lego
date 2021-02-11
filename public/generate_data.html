@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Model Training</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta1/dist/css/bootstrap.min.css" rel="stylesheet"
+      integrity="sha384-giJF6kkoqNQ00vy+HMDP7azOuL0xtbfIcaT9wjKHr8RbDVddVHyTfAAsrekwKmP1" crossorigin="anonymous">
+  </head>
+  <body>
+    <div class="container">
+
+      <h1>Face Landmark Data Extractor</h1>
+
+      <div class="border p-3 m-2">
+        <div class="input-group">
+          <label class="input-group-text" for="inputGroupFile01">Photo Upload</label>
+          <input type="file" class="form-control" id="inputGroupFile01" multiple onchange="onInputChange()">
+        </div>
+      </div>
+
+      <button id="run-btn" class="btn btn-primary m-3" onclick="run()" disabled>RUN EXTRACTOR!</button>
+
+
+      <div id="progressPanel" style="display: none;">
+        <h2>Progress</h2>
+
+        <div id="progress-bar" >
+          <p id="status">Extracting Landmarks</p>
+          <div class="progress">
+            <div id="trainingProgress" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <div id='done-alert' style="display: none;" class="alert alert-success m-2" role="alert">
+          DONE!
+        </div>
+      </div>
+
+
+
+      <canvas id="canvas" width="640" height="480" style="display: none;"></canvas>
+
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta1/dist/js/bootstrap.bundle.min.js"
+      integrity="sha384-ygbV9kiqUc6oa4msXn9868pTtWMgiQaeYH7/t7LECLbyPA2x65Kgf80OJFdroafW"
+      crossorigin="anonymous"></script>
+    <!-- Require the peer dependencies of face-landmarks-detection. -->
+    <script src="https://unpkg.com/@tensorflow/tfjs-core@2.4.0/dist/tf-core.js"></script>
+    <script src="https://unpkg.com/@tensorflow/tfjs-converter@2.4.0/dist/tf-converter.js"></script>
+
+    <!-- You must explicitly require a TF.js backend if you're not using the tfjs union bundle. -->
+    <script src="https://unpkg.com/@tensorflow/tfjs-backend-webgl@2.4.0/dist/tf-backend-webgl.js"></script>
+    <!-- Alternatively you can use the WASM backend: <script src="https://unpkg.com/@tensorflow/tfjs-backend-wasm@2.4.0/dist/tf-backend-wasm.js"></script> -->
+
+    <!-- Require face-landmarks-detection itself. -->
+    <script
+      src="https://unpkg.com/@tensorflow-models/face-landmarks-detection@0.0.1/dist/face-landmarks-detection.js"></script>
+
+    <script>
+      const trainingProgress = document.getElementById('trainingProgress');
+      const canvas = document.getElementById('canvas');
+      const progressPanel = document.getElementById('progressPanel')
+      const doneAlert = document.getElementById('done-alert');
+      const imagesUploaded = false;
+
+      let files = [];
+
+      async function onInputChange() {
+        files = event.target.files;
+        document.getElementById('run-btn').disabled = false;
+      }
+
+      function resetProgress() {
+        trainingProgress.style.width = '0%';
+        trainingProgress.setAttribute('aria-valuenow', 0);
+      }
+
+      function setProgress(value) {
+        trainingProgress.style.width = `${value}%`;
+        trainingProgress.setAttribute('aria-valuenow', value);
+      }
+
+      // From: https://stackoverflow.com/a/30800715
+      function downloadObjectAsJson(exportObj, exportName){
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportObj));
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute("href",     dataStr);
+        downloadAnchorNode.setAttribute("download", exportName + ".json");
+        document.body.appendChild(downloadAnchorNode); // required for firefox
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
+      }
+
+      function writeFileToCanvas(file) {
+        return new Promise((resolve, reject) => {
+          const ctx = canvas.getContext('2d');
+          const img = new Image();
+          img.onload = () => {
+            ctx.drawImage(img, 0, 0);
+            resolve();
+          };
+          img.src = URL.createObjectURL(file);
+        });
+      }
+
+      function showProgressPanel() {
+        progressPanel.style.display = 'block';
+      }
+
+      function hideProgressPanel() {
+        progressPanel.style.display = 'none';
+      }
+
+      function hideSuccessAlert() {
+        doneAlert.style.display = 'none';
+      }
+
+      function showSuccessAlert() {
+        doneAlert.style.display = 'block';
+      }
+
+      async function run() {
+        try {
+          await tf.ready();
+
+          showProgressPanel();
+          hideSuccessAlert();
+
+          const predictions = {};
+
+          const model = await faceLandmarksDetection.load(
+            faceLandmarksDetection.SupportedPackages.mediapipeFacemesh);
+
+          const totalFiles = files.length;
+
+          for (let  i = 0; i < files.length; i++) {
+            const file = files[i];
+            const [filename] = file.name.split('.');
+            const [subject, label] = filename.split('_');
+
+            await writeFileToCanvas(file);
+
+            // Take the first face
+            const [prediction] = await model.estimateFaces({
+              input: canvas
+            });
+
+            predictions[filename] = prediction.annotations;
+
+            setProgress((i + 1) / totalFiles * 100);
+          }
+
+          showSuccessAlert();
+
+          downloadObjectAsJson(predictions, 'landmarks');
+        } catch(err) {
+          console.error(err);
+        }
+      }
+
+      hideProgressPanel();
+      resetProgress();
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta1/dist/js/bootstrap.bundle.min.js"
+    integrity="sha384-ygbV9kiqUc6oa4msXn9868pTtWMgiQaeYH7/t7LECLbyPA2x65Kgf80OJFdroafW"
+    crossorigin="anonymous"></script>
+  </body>
+</html>
